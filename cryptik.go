@@ -1,4 +1,4 @@
-package gootp
+package cryptik
 
 import (
 	"crypto/rand"
@@ -14,28 +14,28 @@ var (
 	ErrInvalidOTP = errors.New("invalid OTP provided")
 )
 
-// OTPService defines the interface for OTP (One-Time Password) operations.
+// CryptikService defines the interface for OTP (One-Time Password) operations.
 // It provides methods for generating and validating OTPs using a secret key.
-type OTPService interface {
+type CryptikService interface {
 	GenerateOTP(secret string) (string, error)
 	ValidateOTP(secret, otp string) (bool, error)
 }
 
-// otpServiceInstance is the concrete implementation of the OTPService interface.
+// cryptikInstance is the concrete implementation of the OTPService interface.
 // It handles OTP generation and validation using a cache service to store and verify OTPs.
 // Fields:
 //   - CacheService: A cache implementation used to store generated OTPs temporarily
 //   - Length: The length of generated OTPs (e.g., 6 for a 6-digit OTP)
-type otpServiceInstance struct {
+type cryptikInstance struct {
 	CacheService cache.Cache
 	Length       int
 }
 
-// GoOTPServiceConfig defines the configuration options for the OTP service.
+// CryptikConfig defines the configuration options for the OTP service.
 // Fields:
 //   - Cache: The cache implementation to use for storing OTPs
 //   - Length: The desired length of generated OTPs (e.g., 6 for 6-digit OTPs)
-type GoOTPServiceConfig struct {
+type CryptikConfig struct {
 	Cache  cache.Cache
 	Length int
 }
@@ -49,7 +49,7 @@ type GoOTPServiceConfig struct {
 // Returns:
 //   - string: The generated OTP
 //   - error: An error if OTP generation or cache storage fails
-func (o otpServiceInstance) GenerateOTP(key string) (string, error) {
+func (o cryptikInstance) GenerateOTP(key string) (string, error) {
 	// Calculate min and max values for the desired length
 	// For 6 digits: min=100000, max=999999
 	min := int64(1)
@@ -91,7 +91,7 @@ func (o otpServiceInstance) GenerateOTP(key string) (string, error) {
 // Returns:
 //   - bool: true if the OTP is valid, false otherwise
 //   - error: ErrInvalidOTP if OTP format is invalid, or other errors explaining validation failure
-func (o otpServiceInstance) ValidateOTP(key, otp string) (bool, error) {
+func (o cryptikInstance) ValidateOTP(key, otp string) (bool, error) {
 	if otp == "" || len(otp) != o.Length {
 		return false, ErrInvalidOTP
 	}
@@ -114,12 +114,12 @@ func (o otpServiceInstance) ValidateOTP(key, otp string) (bool, error) {
 // If no length is specified (or if length < 1), it defaults to 6 digits.
 //
 // Parameters:
-//   - conf: GoOTPServiceConfig containing the cache service and desired OTP length
+//   - conf: cryptikServiceConfig containing the cache service and desired OTP length
 //
 // Returns:
 //   - OTPService: An interface implementation for OTP operations
 //   - error: Currently always returns nil, but maintained for future error handling
-func NewService(conf GoOTPServiceConfig) (OTPService, error) {
+func NewService(conf CryptikConfig) (CryptikService, error) {
 	//if no cache service is provided, we will use default cache implementation
 	if conf.Cache == nil {
 		conf.Cache = cache.GetCache()
@@ -130,7 +130,7 @@ func NewService(conf GoOTPServiceConfig) (OTPService, error) {
 	}
 
 	// Initialization logic can be added here if needed
-	return otpServiceInstance{
+	return cryptikInstance{
 		conf.Cache,
 		conf.Length,
 	}, nil

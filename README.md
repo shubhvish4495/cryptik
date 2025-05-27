@@ -48,7 +48,7 @@ import (
 )
 
 func main() {
-    otpService, err := cryptik.NewService(cryptik.GoOTPServiceConfig{
+    otpService, err := cryptik.NewService(cryptik.cryptikServiceConfig{
         Length: 6,
         Cache:  cryptik.NewCache(),
     })
@@ -115,7 +115,7 @@ type Cache interface {
 Use it like this:
 
 ```go
-otpService, err := cryptik.NewService(cryptik.GoOTPServiceConfig{
+otpService, err := cryptik.NewService(cryptik.cryptikServiceConfig{
     Cache:  myCustomCache,
     Length: 6,
 })
@@ -126,7 +126,7 @@ otpService, err := cryptik.NewService(cryptik.GoOTPServiceConfig{
 ## Configuration
 
 ```go
-type GoOTPServiceConfig struct {
+type cryptikServiceConfig struct {
     Cache  cache.Cache // optional
     Length int         // optional, default: 6
 }
