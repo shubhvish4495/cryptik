@@ -48,10 +48,10 @@ import (
 )
 
 func main() {
-    otpService, err := cryptik.NewService(cryptik.cryptikServiceConfig{
-        Length: 6,
-        Cache:  cryptik.NewCache(),
-    })
+    otpService, err := cryptik.NewService(cryptik.CryptikConfig{
+  		Length: 6,
+  		Cache:  cache.GetCache(),
+  	})
     if err != nil {
         panic(err)
     }
