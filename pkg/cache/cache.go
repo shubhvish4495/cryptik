@@ -2,6 +2,7 @@
 package cache
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"time"
@@ -12,19 +13,6 @@ var (
 	instance Cache     // Singleton instance of the cache
 	once     sync.Once // Ensures thread-safe initialization
 )
-
-// Logger interface defines methods for logging operations.
-// This can be implemented for custom logging solutions.
-type Logger interface {
-	// Info logs an informational message.
-	Info(msg string, args ...any)
-	// Error logs an error message.
-	Error(msg string, args ...any)
-	// Debug logs a debug message.
-	Debug(msg string, args ...any)
-	// Warn logs a warning message.
-	Warn(msg string, args ...any)
-}
 
 // Cache interface defines the methods that must be implemented by any cache implementation.
 type Cache interface {
@@ -117,11 +105,10 @@ func (c *CacheInstance) Delete(key string) {
 func (c *CacheInstance) Exists(key string) bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	_, exists := (c.data)[key]
+	entry, exists := (c.data)[key]
 	if !exists {
 		return false
 	}
-	entry := (c.data)[key]
 	return !entry.IsExpired()
 }
 
@@ -134,18 +121,25 @@ func (c *CacheInstance) Clear() {
 
 // GetCache returns the singleton instance of the cache.
 // If the instance doesn't exist, it creates one and starts the cleanup routine.
-func GetCache() Cache {
+func GetCache(ctx context.Context) Cache {
 	once.Do(func() {
 		instance = &CacheInstance{
 			data: make(map[string]CacheEntry),
 			mu:   sync.RWMutex{},
 		}
 
+		ticker := time.NewTicker(1 * time.Minute)
+
 		// Start a goroutine to periodically remove expired entries
 		go func() {
+			defer ticker.Stop()
 			for {
-				time.Sleep(1 * time.Minute)
-				instance.RemoveExpiredEntries()
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					instance.RemoveExpiredEntries()
+				}
 			}
 		}()
 	})
