@@ -3,6 +3,7 @@ package cryptik
 import (
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"math/big"
@@ -104,7 +105,7 @@ func (o *cryptikInstance) ValidateOTP(key, otp string) (bool, error) {
 	}
 
 	str, ok := cachedOTP.(string)
-	if !ok || str != otp {
+	if !ok || subtle.ConstantTimeCompare([]byte(str), []byte(otp)) != 1 {
 		return false, fmt.Errorf("OTP does not match")
 	}
 	// If OTP matches, delete it from cache to prevent reuse
