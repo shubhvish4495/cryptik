@@ -1,6 +1,7 @@
 package cryptik
 
 import (
+	"context"
 	"crypto/rand"
 	"errors"
 	"fmt"
@@ -17,8 +18,8 @@ var (
 // CryptikService defines the interface for OTP (One-Time Password) operations.
 // It provides methods for generating and validating OTPs using a secret key.
 type CryptikService interface {
-	GenerateOTP(secret string) (string, error)
-	ValidateOTP(secret, otp string) (bool, error)
+	GenerateOTP(key string, expiry time.Duration) (string, error)
+	ValidateOTP(key, otp string) (bool, error)
 }
 
 // cryptikInstance is the concrete implementation of the OTPService interface.
@@ -42,14 +43,15 @@ type CryptikConfig struct {
 
 // GenerateOTP creates a cryptographically secure random OTP (One-Time Password) for a given key.
 // It generates a random number with the specified length (e.g., 6 digits would be between 100000 and 999999).
-// The generated OTP is stored in the cache with the provided key and expires after 10 minutes.
+// The generated OTP is stored in the cache with the provided key and expires after the specified duration.
 // Parameters:
 //   - key: The unique identifier used to store and later validate the OTP
+//   - expiry: The duration after which the OTP expires
 //
 // Returns:
 //   - string: The generated OTP
 //   - error: An error if OTP generation or cache storage fails
-func (o cryptikInstance) GenerateOTP(key string) (string, error) {
+func (o *cryptikInstance) GenerateOTP(key string, expiry time.Duration) (string, error) {
 	// Calculate min and max values for the desired length
 	// For 6 digits: min=100000, max=999999
 	min := int64(1)
@@ -62,18 +64,18 @@ func (o cryptikInstance) GenerateOTP(key string) (string, error) {
 	diff := big.NewInt(max - min + 1)
 	n, err := rand.Int(rand.Reader, diff)
 	if err != nil {
-		return "", fmt.Errorf("failed to generate random number: %v", err)
+		return "", fmt.Errorf("failed to generate random number: %w", err)
 	}
 
 	result := n.Int64() + min
 	otp := fmt.Sprintf("%0*d", o.Length, result)
 
 	//store it in cache with key sepcified so that it can be validated later
-	if err := o.CacheService.Set(key, otp, time.Now().Add(10*time.Minute).Unix()); err != nil {
-		return "", fmt.Errorf("failed to store OTP in cache: %v", err)
+	if err := o.CacheService.Set(key, otp, time.Now().Add(expiry).Unix()); err != nil {
+		return "", fmt.Errorf("failed to store OTP in cache: %w", err)
 	}
 
-	return fmt.Sprintf("%0*d", o.Length, result), nil
+	return otp, nil
 }
 
 // ValidateOTP verifies if the provided OTP matches the one stored in cache for the given key.
@@ -91,18 +93,19 @@ func (o cryptikInstance) GenerateOTP(key string) (string, error) {
 // Returns:
 //   - bool: true if the OTP is valid, false otherwise
 //   - error: ErrInvalidOTP if OTP format is invalid, or other errors explaining validation failure
-func (o cryptikInstance) ValidateOTP(key, otp string) (bool, error) {
+func (o *cryptikInstance) ValidateOTP(key, otp string) (bool, error) {
 	if otp == "" || len(otp) != o.Length {
 		return false, ErrInvalidOTP
 	}
 
 	cachedOTP, exists := o.CacheService.Get(key)
 	if !exists {
-		return false, fmt.Errorf("OTP not found in cache for secret: %s", key)
+		return false, fmt.Errorf("OTP not found or expired")
 	}
 
-	if cachedOTP == nil || cachedOTP.(string) != otp {
-		return false, fmt.Errorf("OTP does not match for secret: %s", key)
+	str, ok := cachedOTP.(string)
+	if !ok || str != otp {
+		return false, fmt.Errorf("OTP does not match")
 	}
 	// If OTP matches, delete it from cache to prevent reuse
 	o.CacheService.Delete(key)
@@ -119,10 +122,10 @@ func (o cryptikInstance) ValidateOTP(key, otp string) (bool, error) {
 // Returns:
 //   - OTPService: An interface implementation for OTP operations
 //   - error: Currently always returns nil, but maintained for future error handling
-func NewService(conf CryptikConfig) (CryptikService, error) {
+func NewService(ctx context.Context, conf CryptikConfig) (CryptikService, error) {
 	//if no cache service is provided, we will use default cache implementation
 	if conf.Cache == nil {
-		conf.Cache = cache.GetCache()
+		conf.Cache = cache.GetCache(ctx)
 	}
 
 	if conf.Length < 1 {
@@ -130,7 +133,7 @@ func NewService(conf CryptikConfig) (CryptikService, error) {
 	}
 
 	// Initialization logic can be added here if needed
-	return cryptikInstance{
+	return &cryptikInstance{
 		conf.Cache,
 		conf.Length,
 	}, nil
